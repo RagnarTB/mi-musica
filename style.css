@@ -497,6 +497,7 @@ body {
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    position: relative;
 }
 
 .btn-control:active {
@@ -505,6 +506,15 @@ body {
 
 .btn-control.active {
     color: var(--accent);
+}
+
+.btn-control .repeat-one {
+    position: absolute;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--accent);
+    bottom: 8px;
+    right: 8px;
 }
 
 .btn-control svg {

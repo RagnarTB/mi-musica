@@ -1,5 +1,5 @@
 // ==========================================
-// MiMúsica v3 - Con Audio Mejorado
+// MiMúsica v4 - Fixes iOS Audio
 // ==========================================
 
 const DB_NAME = 'MiMusicaDB';
@@ -25,14 +25,15 @@ let highMidFilter = null;
 let trebleFilter = null;
 let compressor = null;
 let preampGain = null;
+let audioContextInitialized = false;
 
 // Configuración de audio actual
 let audioSettings = {
     preset: 'bass-boost',
     volume: 100,
-    boost: 100,
+    boost: 110,
     bass: 6,
-    lowMid: 2,
+    lowMid: 3,
     mid: 0,
     highMid: 1,
     treble: 2
@@ -51,7 +52,13 @@ const PRESETS = {
     'custom': { bass: 6, lowMid: 2, mid: 0, highMid: 1, treble: 2, boost: 100, name: 'Personalizado' }
 };
 
+// Current track blob URL (para reutilizar)
+let currentBlobUrl = null;
+
+// ==========================================
 // DOM Elements
+// ==========================================
+
 const audioPlayer = document.getElementById('audioPlayer');
 const fileInput = document.getElementById('fileInput');
 const addMusicBtn = document.getElementById('addMusicBtn');
@@ -63,7 +70,6 @@ const miniPlayer = document.getElementById('miniPlayer');
 const searchInput = document.getElementById('searchInput');
 const searchClear = document.getElementById('searchClear');
 
-// Player controls
 const playBtn = document.getElementById('playBtn');
 const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
@@ -76,7 +82,6 @@ const volumeBar = document.getElementById('volumeBar');
 const miniPlayBtn = document.getElementById('miniPlayBtn');
 const eqBtn = document.getElementById('eqBtn');
 
-// Audio controls
 const eqPanel = document.getElementById('eqPanel');
 const closeEqBtn = document.getElementById('closeEqBtn');
 const presetBtns = document.querySelectorAll('.preset-btn');
@@ -93,7 +98,6 @@ const highMidValue = document.getElementById('highMidValue');
 const trebleSlider = document.getElementById('trebleSlider');
 const trebleValue = document.getElementById('trebleValue');
 
-// Display elements
 const trackTitle = document.getElementById('trackTitle');
 const trackArtist = document.getElementById('trackArtist');
 const albumArt = document.getElementById('albumArt');
@@ -107,86 +111,164 @@ const storageUsed = document.getElementById('storageUsed');
 const storageText = document.getElementById('storageText');
 
 // ==========================================
+// Audio Player Setup para iOS
+// ==========================================
+
+function setupAudioPlayer() {
+    // Configuración crítica para iOS
+    audioPlayer.setAttribute('playsinline', '');
+    audioPlayer.setAttribute('webkit-playsinline', '');
+    audioPlayer.preload = 'auto';
+    
+    // Permitir reproducción en background en iOS
+    if ('mediaSession' in navigator) {
+        setupMediaSession();
+    }
+}
+
+function setupMediaSession() {
+    navigator.mediaSession.setActionHandler('play', async () => {
+        await handlePlay();
+    });
+    
+    navigator.mediaSession.setActionHandler('pause', () => {
+        handlePause();
+    });
+    
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+        playPrev();
+    });
+    
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+        playNext();
+    });
+    
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined) {
+            audioPlayer.currentTime = details.seekTime;
+        }
+    });
+    
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        audioPlayer.currentTime = Math.max(audioPlayer.currentTime - skipTime, 0);
+    });
+    
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        audioPlayer.currentTime = Math.min(audioPlayer.currentTime + skipTime, audioPlayer.duration || 0);
+    });
+}
+
+function updateMediaSessionMetadata(track) {
+    if (!('mediaSession' in navigator)) return;
+    
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.name,
+        artist: track.artist,
+        album: 'MiMúsica',
+        artwork: track.artwork ? [
+            { src: track.artwork, sizes: '512x512', type: 'image/png' }
+        ] : [
+            { src: 'icon-512.png', sizes: '512x512', type: 'image/png' }
+        ]
+    });
+}
+
+function updateMediaSessionState() {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+}
+
+// ==========================================
 // Web Audio API Setup
 // ==========================================
 
 function initAudioContext() {
-    if (audioContext) return;
+    if (audioContextInitialized) return true;
     
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // Crear nodos
-    sourceNode = audioContext.createMediaElementSource(audioPlayer);
-    
-    // Preamp para boost general
-    preampGain = audioContext.createGain();
-    preampGain.gain.value = 1;
-    
-    // Filtros de ecualizador (BiquadFilter)
-    // Bass: 60Hz
-    bassFilter = audioContext.createBiquadFilter();
-    bassFilter.type = 'lowshelf';
-    bassFilter.frequency.value = 60;
-    bassFilter.gain.value = audioSettings.bass;
-    
-    // Low-Mid: 250Hz
-    lowMidFilter = audioContext.createBiquadFilter();
-    lowMidFilter.type = 'peaking';
-    lowMidFilter.frequency.value = 250;
-    lowMidFilter.Q.value = 1;
-    lowMidFilter.gain.value = audioSettings.lowMid;
-    
-    // Mid: 1kHz
-    midFilter = audioContext.createBiquadFilter();
-    midFilter.type = 'peaking';
-    midFilter.frequency.value = 1000;
-    midFilter.Q.value = 1;
-    midFilter.gain.value = audioSettings.mid;
-    
-    // High-Mid: 4kHz
-    highMidFilter = audioContext.createBiquadFilter();
-    highMidFilter.type = 'peaking';
-    highMidFilter.frequency.value = 4000;
-    highMidFilter.Q.value = 1;
-    highMidFilter.gain.value = audioSettings.highMid;
-    
-    // Treble: 12kHz
-    trebleFilter = audioContext.createBiquadFilter();
-    trebleFilter.type = 'highshelf';
-    trebleFilter.frequency.value = 12000;
-    trebleFilter.gain.value = audioSettings.treble;
-    
-    // Compresor para evitar distorsión
-    compressor = audioContext.createDynamicsCompressor();
-    compressor.threshold.value = -6;
-    compressor.knee.value = 30;
-    compressor.ratio.value = 4;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.25;
-    
-    // Gain final (volumen)
-    gainNode = audioContext.createGain();
-    gainNode.gain.value = audioSettings.volume / 100;
-    
-    // Conectar cadena de audio
-    sourceNode
-        .connect(preampGain)
-        .connect(bassFilter)
-        .connect(lowMidFilter)
-        .connect(midFilter)
-        .connect(highMidFilter)
-        .connect(trebleFilter)
-        .connect(compressor)
-        .connect(gainNode)
-        .connect(audioContext.destination);
-    
-    // Aplicar preset inicial
-    applyPreset('bass-boost');
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Crear nodos
+        sourceNode = audioContext.createMediaElementSource(audioPlayer);
+        
+        // Preamp para boost general
+        preampGain = audioContext.createGain();
+        preampGain.gain.value = audioSettings.boost / 100;
+        
+        // Bass: 60Hz
+        bassFilter = audioContext.createBiquadFilter();
+        bassFilter.type = 'lowshelf';
+        bassFilter.frequency.value = 60;
+        bassFilter.gain.value = audioSettings.bass;
+        
+        // Low-Mid: 250Hz
+        lowMidFilter = audioContext.createBiquadFilter();
+        lowMidFilter.type = 'peaking';
+        lowMidFilter.frequency.value = 250;
+        lowMidFilter.Q.value = 1;
+        lowMidFilter.gain.value = audioSettings.lowMid;
+        
+        // Mid: 1kHz
+        midFilter = audioContext.createBiquadFilter();
+        midFilter.type = 'peaking';
+        midFilter.frequency.value = 1000;
+        midFilter.Q.value = 1;
+        midFilter.gain.value = audioSettings.mid;
+        
+        // High-Mid: 4kHz
+        highMidFilter = audioContext.createBiquadFilter();
+        highMidFilter.type = 'peaking';
+        highMidFilter.frequency.value = 4000;
+        highMidFilter.Q.value = 1;
+        highMidFilter.gain.value = audioSettings.highMid;
+        
+        // Treble: 12kHz
+        trebleFilter = audioContext.createBiquadFilter();
+        trebleFilter.type = 'highshelf';
+        trebleFilter.frequency.value = 12000;
+        trebleFilter.gain.value = audioSettings.treble;
+        
+        // Compresor para evitar distorsión
+        compressor = audioContext.createDynamicsCompressor();
+        compressor.threshold.value = -6;
+        compressor.knee.value = 30;
+        compressor.ratio.value = 4;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+        
+        // Gain final (volumen)
+        gainNode = audioContext.createGain();
+        gainNode.gain.value = audioSettings.volume / 100;
+        
+        // Conectar cadena de audio
+        sourceNode
+            .connect(preampGain)
+            .connect(bassFilter)
+            .connect(lowMidFilter)
+            .connect(midFilter)
+            .connect(highMidFilter)
+            .connect(trebleFilter)
+            .connect(compressor)
+            .connect(gainNode)
+            .connect(audioContext.destination);
+        
+        audioContextInitialized = true;
+        return true;
+    } catch (error) {
+        console.error('Error inicializando AudioContext:', error);
+        return false;
+    }
 }
 
-function resumeAudioContext() {
+async function resumeAudioContext() {
     if (audioContext && audioContext.state === 'suspended') {
-        audioContext.resume();
+        try {
+            await audioContext.resume();
+        } catch (error) {
+            console.error('Error resumiendo AudioContext:', error);
+        }
     }
 }
 
@@ -213,24 +295,24 @@ function applyPreset(presetName) {
 }
 
 function updateAudioNodes() {
-    if (!audioContext) return;
+    if (!audioContextInitialized) return;
     
-    // Aplicar valores a los filtros
-    bassFilter.gain.value = audioSettings.bass;
-    lowMidFilter.gain.value = audioSettings.lowMid;
-    midFilter.gain.value = audioSettings.mid;
-    highMidFilter.gain.value = audioSettings.highMid;
-    trebleFilter.gain.value = audioSettings.treble;
-    
-    // Boost (preamp)
-    preampGain.gain.value = audioSettings.boost / 100;
-    
-    // Volumen final
-    gainNode.gain.value = audioSettings.volume / 100;
+    try {
+        bassFilter.gain.value = audioSettings.bass;
+        lowMidFilter.gain.value = audioSettings.lowMid;
+        midFilter.gain.value = audioSettings.mid;
+        highMidFilter.gain.value = audioSettings.highMid;
+        trebleFilter.gain.value = audioSettings.treble;
+        preampGain.gain.value = audioSettings.boost / 100;
+        gainNode.gain.value = audioSettings.volume / 100;
+    } catch (error) {
+        console.error('Error actualizando nodos de audio:', error);
+    }
 }
 
 function updateEqUI() {
-    // Actualizar sliders
+    if (!boostSlider) return;
+    
     boostSlider.value = audioSettings.boost;
     boostValue.textContent = audioSettings.boost + '%';
     
@@ -257,13 +339,21 @@ function updatePresetButtons() {
 }
 
 function saveAudioSettings() {
-    localStorage.setItem('mimusica-audio', JSON.stringify(audioSettings));
+    try {
+        localStorage.setItem('mimusica-audio', JSON.stringify(audioSettings));
+    } catch (error) {
+        console.error('Error guardando configuración:', error);
+    }
 }
 
 function loadAudioSettings() {
-    const saved = localStorage.getItem('mimusica-audio');
-    if (saved) {
-        audioSettings = { ...audioSettings, ...JSON.parse(saved) };
+    try {
+        const saved = localStorage.getItem('mimusica-audio');
+        if (saved) {
+            audioSettings = { ...audioSettings, ...JSON.parse(saved) };
+        }
+    } catch (error) {
+        console.error('Error cargando configuración:', error);
     }
 }
 
@@ -312,7 +402,7 @@ async function getAllTracks() {
     });
 }
 
-async function deleteTrack(id) {
+async function deleteTrackFromDB(id) {
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
@@ -332,26 +422,32 @@ function generateId() {
 }
 
 async function handleFiles(files) {
-    for (const file of files) {
+    const fileArray = Array.from(files);
+    
+    for (const file of fileArray) {
         if (!file.type.startsWith('audio/')) continue;
         
-        const arrayBuffer = await file.arrayBuffer();
-        const metadata = await extractMetadata(file);
-        
-        const trackData = {
-            id: generateId(),
-            name: metadata.title || file.name.replace(/\.[^/.]+$/, ''),
-            artist: metadata.artist || 'Artista desconocido',
-            duration: metadata.duration || 0,
-            artwork: metadata.artwork || null,
-            data: arrayBuffer,
-            mimeType: file.type,
-            size: file.size,
-            addedAt: Date.now()
-        };
-        
-        await saveTrack(trackData);
-        tracks.push(trackData);
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const metadata = await extractMetadata(file);
+            
+            const trackData = {
+                id: generateId(),
+                name: metadata.title || file.name.replace(/\.[^/.]+$/, ''),
+                artist: metadata.artist || 'Artista desconocido',
+                duration: metadata.duration || 0,
+                artwork: metadata.artwork || null,
+                data: arrayBuffer,
+                mimeType: file.type,
+                size: file.size,
+                addedAt: Date.now()
+            };
+            
+            await saveTrack(trackData);
+            tracks.push(trackData);
+        } catch (error) {
+            console.error('Error procesando archivo:', error);
+        }
     }
     
     filterTracks();
@@ -363,7 +459,17 @@ async function extractMetadata(file) {
         const audio = new Audio();
         const url = URL.createObjectURL(file);
         
+        const cleanup = () => {
+            URL.revokeObjectURL(url);
+        };
+        
+        const timeout = setTimeout(() => {
+            cleanup();
+            resolve({ duration: 0, title: file.name.replace(/\.[^/.]+$/, ''), artist: null, artwork: null });
+        }, 5000);
+        
         audio.onloadedmetadata = () => {
+            clearTimeout(timeout);
             const metadata = {
                 duration: audio.duration,
                 title: null,
@@ -380,13 +486,14 @@ async function extractMetadata(file) {
                 metadata.title = name;
             }
             
-            URL.revokeObjectURL(url);
+            cleanup();
             resolve(metadata);
         };
         
         audio.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve({ duration: 0, title: file.name, artist: null, artwork: null });
+            clearTimeout(timeout);
+            cleanup();
+            resolve({ duration: 0, title: file.name.replace(/\.[^/.]+$/, ''), artist: null, artwork: null });
         };
         
         audio.src = url;
@@ -416,6 +523,7 @@ function filterTracks() {
 function clearSearch() {
     searchInput.value = '';
     filterTracks();
+    searchInput.blur();
 }
 
 // ==========================================
@@ -453,8 +561,8 @@ function renderTrackList() {
                 }
             </div>
             <div class="track-item-info">
-                <div class="track-item-title">${track.name}</div>
-                <div class="track-item-artist">${track.artist}</div>
+                <div class="track-item-title">${escapeHtml(track.name)}</div>
+                <div class="track-item-artist">${escapeHtml(track.artist)}</div>
             </div>
             <div class="track-item-duration">${formatTime(track.duration)}</div>
         `;
@@ -462,6 +570,12 @@ function renderTrackList() {
         item.addEventListener('click', () => playTrack(originalIndex));
         trackList.appendChild(item);
     });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function updateStorageInfo() {
@@ -487,31 +601,93 @@ function formatTime(seconds) {
 }
 
 // ==========================================
-// Playback
+// Playback - Core Functions
 // ==========================================
 
 async function playTrack(index) {
     if (index < 0 || index >= tracks.length) return;
     
-    // Inicializar audio context en primer play
-    initAudioContext();
-    resumeAudioContext();
+    // Limpiar URL anterior
+    if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl);
+        currentBlobUrl = null;
+    }
     
     currentTrackIndex = index;
     const track = tracks[index];
     
+    // Crear nuevo blob URL
     const blob = new Blob([track.data], { type: track.mimeType });
-    const url = URL.createObjectURL(blob);
+    currentBlobUrl = URL.createObjectURL(blob);
     
-    audioPlayer.src = url;
-    audioPlayer.play();
-    isPlaying = true;
+    // Configurar audio
+    audioPlayer.src = currentBlobUrl;
+    audioPlayer.load();
     
+    // Actualizar UI primero
     updatePlayerUI(track);
-    updatePlayButtons();
+    updateMediaSessionMetadata(track);
     renderTrackList();
     showMiniPlayer();
     showPlayerScreen();
+    
+    // Inicializar contexto y reproducir
+    initAudioContext();
+    await resumeAudioContext();
+    
+    try {
+        await audioPlayer.play();
+        isPlaying = true;
+        updatePlayButtons();
+        updateMediaSessionState();
+    } catch (error) {
+        console.error('Error reproduciendo:', error);
+        isPlaying = false;
+        updatePlayButtons();
+    }
+}
+
+async function handlePlay() {
+    if (currentTrackIndex === -1 && tracks.length > 0) {
+        await playTrack(0);
+        return;
+    }
+    
+    if (currentTrackIndex === -1) return;
+    
+    initAudioContext();
+    await resumeAudioContext();
+    
+    try {
+        await audioPlayer.play();
+        isPlaying = true;
+        updatePlayButtons();
+        updateMediaSessionState();
+    } catch (error) {
+        console.error('Error en play:', error);
+    }
+}
+
+function handlePause() {
+    audioPlayer.pause();
+    isPlaying = false;
+    updatePlayButtons();
+    updateMediaSessionState();
+}
+
+async function togglePlay() {
+    if (currentTrackIndex === -1 && tracks.length > 0) {
+        await playTrack(0);
+        return;
+    }
+    
+    if (currentTrackIndex === -1) return;
+    
+    if (isPlaying) {
+        handlePause();
+    } else {
+        await handlePlay();
+    }
 }
 
 function updatePlayerUI(track) {
@@ -544,32 +720,6 @@ function updatePlayerUI(track) {
             </svg>
         `;
     }
-    
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.name,
-            artist: track.artist,
-            artwork: track.artwork ? [{ src: track.artwork }] : []
-        });
-    }
-}
-
-function togglePlay() {
-    if (currentTrackIndex === -1 && tracks.length > 0) {
-        playTrack(0);
-        return;
-    }
-    
-    initAudioContext();
-    resumeAudioContext();
-    
-    if (isPlaying) {
-        audioPlayer.pause();
-    } else {
-        audioPlayer.play();
-    }
-    isPlaying = !isPlaying;
-    updatePlayButtons();
 }
 
 function updatePlayButtons() {
@@ -580,20 +730,22 @@ function updatePlayButtons() {
     miniPlayBtn.innerHTML = isPlaying ? pauseIcon : playIcon;
 }
 
-function playNext() {
+async function playNext() {
     if (tracks.length === 0) return;
     
     let nextIndex;
     if (isShuffle) {
-        nextIndex = Math.floor(Math.random() * tracks.length);
+        do {
+            nextIndex = Math.floor(Math.random() * tracks.length);
+        } while (nextIndex === currentTrackIndex && tracks.length > 1);
     } else {
         nextIndex = (currentTrackIndex + 1) % tracks.length;
     }
     
-    playTrack(nextIndex);
+    await playTrack(nextIndex);
 }
 
-function playPrev() {
+async function playPrev() {
     if (tracks.length === 0) return;
     
     if (audioPlayer.currentTime > 3) {
@@ -603,12 +755,14 @@ function playPrev() {
     
     let prevIndex;
     if (isShuffle) {
-        prevIndex = Math.floor(Math.random() * tracks.length);
+        do {
+            prevIndex = Math.floor(Math.random() * tracks.length);
+        } while (prevIndex === currentTrackIndex && tracks.length > 1);
     } else {
         prevIndex = (currentTrackIndex - 1 + tracks.length) % tracks.length;
     }
     
-    playTrack(prevIndex);
+    await playTrack(prevIndex);
 }
 
 function toggleShuffle() {
@@ -620,18 +774,14 @@ function toggleRepeat() {
     repeatMode = (repeatMode + 1) % 3;
     repeatBtn.classList.toggle('active', repeatMode > 0);
     
+    const existingIndicator = repeatBtn.querySelector('.repeat-one');
+    if (existingIndicator) existingIndicator.remove();
+    
     if (repeatMode === 2) {
-        repeatBtn.style.position = 'relative';
-        if (!repeatBtn.querySelector('.repeat-one')) {
-            const indicator = document.createElement('span');
-            indicator.className = 'repeat-one';
-            indicator.style.cssText = 'position:absolute;font-size:10px;font-weight:bold;';
-            indicator.textContent = '1';
-            repeatBtn.appendChild(indicator);
-        }
-    } else {
-        const indicator = repeatBtn.querySelector('.repeat-one');
-        if (indicator) indicator.remove();
+        const indicator = document.createElement('span');
+        indicator.className = 'repeat-one';
+        indicator.textContent = '1';
+        repeatBtn.appendChild(indicator);
     }
 }
 
@@ -640,7 +790,7 @@ function toggleRepeat() {
 // ==========================================
 
 function updateProgress() {
-    if (!audioPlayer.duration) return;
+    if (!audioPlayer.duration || isNaN(audioPlayer.duration)) return;
     
     const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
     progressBar.value = progress;
@@ -650,10 +800,24 @@ function updateProgress() {
     durationEl.textContent = formatTime(audioPlayer.duration);
     
     miniProgress.style.width = `${progress}%`;
+    
+    // Actualizar posición en Media Session
+    if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+        try {
+            navigator.mediaSession.setPositionState({
+                duration: audioPlayer.duration,
+                playbackRate: audioPlayer.playbackRate,
+                position: audioPlayer.currentTime
+            });
+        } catch (e) {
+            // Ignorar errores de posición
+        }
+    }
 }
 
 function seekTo(e) {
-    const percent = e.target.value;
+    if (!audioPlayer.duration) return;
+    const percent = parseFloat(e.target.value);
     audioPlayer.currentTime = (percent / 100) * audioPlayer.duration;
 }
 
@@ -663,7 +827,10 @@ function setVolume(e) {
     
     if (gainNode) {
         gainNode.gain.value = audioSettings.volume / 100;
-    } else {
+    }
+    
+    // Fallback si no hay AudioContext
+    if (!audioContextInitialized) {
         audioPlayer.volume = audioSettings.volume / 100;
     }
     
@@ -676,10 +843,12 @@ function setVolume(e) {
 
 function showEqPanel() {
     eqPanel.classList.add('visible');
+    document.body.style.overflow = 'hidden';
 }
 
 function hideEqPanel() {
     eqPanel.classList.remove('visible');
+    document.body.style.overflow = '';
 }
 
 // ==========================================
@@ -710,21 +879,27 @@ async function deleteCurrentTrack() {
     if (!confirm('¿Eliminar esta canción de tu biblioteca?')) return;
     
     const track = tracks[currentTrackIndex];
-    await deleteTrack(track.id);
     
-    tracks.splice(currentTrackIndex, 1);
-    
+    // Pausar y limpiar
     audioPlayer.pause();
+    if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl);
+        currentBlobUrl = null;
+    }
     audioPlayer.src = '';
     isPlaying = false;
+    
+    await deleteTrackFromDB(track.id);
+    tracks.splice(currentTrackIndex, 1);
     
     if (tracks.length === 0) {
         currentTrackIndex = -1;
         miniPlayer.classList.remove('visible');
         showLibraryScreen();
+        updatePlayButtons();
     } else {
         currentTrackIndex = Math.min(currentTrackIndex, tracks.length - 1);
-        playTrack(currentTrackIndex);
+        await playTrack(currentTrackIndex);
     }
     
     filterTracks();
@@ -739,11 +914,6 @@ async function deleteCurrentTrack() {
 addMusicBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setTimeout(() => fileInput.click(), 100);
-});
-
-addMusicBtn.addEventListener('touchend', (e) => {
-    e.preventDefault();
     fileInput.click();
 });
 
@@ -792,94 +962,86 @@ presetBtns.forEach(btn => {
 });
 
 // EQ Sliders
-boostSlider.addEventListener('input', (e) => {
-    audioSettings.boost = parseInt(e.target.value);
-    audioSettings.preset = 'custom';
-    updateAudioNodes();
-    updateEqUI();
-    updatePresetButtons();
-    saveAudioSettings();
-});
+function handleEqSlider(slider, property) {
+    slider.addEventListener('input', (e) => {
+        audioSettings[property] = parseInt(e.target.value);
+        audioSettings.preset = 'custom';
+        updateAudioNodes();
+        updateEqUI();
+        updatePresetButtons();
+        saveAudioSettings();
+    });
+}
 
-bassSlider.addEventListener('input', (e) => {
-    audioSettings.bass = parseInt(e.target.value);
-    audioSettings.preset = 'custom';
-    updateAudioNodes();
-    updateEqUI();
-    updatePresetButtons();
-    saveAudioSettings();
-});
-
-lowMidSlider.addEventListener('input', (e) => {
-    audioSettings.lowMid = parseInt(e.target.value);
-    audioSettings.preset = 'custom';
-    updateAudioNodes();
-    updateEqUI();
-    updatePresetButtons();
-    saveAudioSettings();
-});
-
-midSlider.addEventListener('input', (e) => {
-    audioSettings.mid = parseInt(e.target.value);
-    audioSettings.preset = 'custom';
-    updateAudioNodes();
-    updateEqUI();
-    updatePresetButtons();
-    saveAudioSettings();
-});
-
-highMidSlider.addEventListener('input', (e) => {
-    audioSettings.highMid = parseInt(e.target.value);
-    audioSettings.preset = 'custom';
-    updateAudioNodes();
-    updateEqUI();
-    updatePresetButtons();
-    saveAudioSettings();
-});
-
-trebleSlider.addEventListener('input', (e) => {
-    audioSettings.treble = parseInt(e.target.value);
-    audioSettings.preset = 'custom';
-    updateAudioNodes();
-    updateEqUI();
-    updatePresetButtons();
-    saveAudioSettings();
-});
+handleEqSlider(boostSlider, 'boost');
+handleEqSlider(bassSlider, 'bass');
+handleEqSlider(lowMidSlider, 'lowMid');
+handleEqSlider(midSlider, 'mid');
+handleEqSlider(highMidSlider, 'highMid');
+handleEqSlider(trebleSlider, 'treble');
 
 // Audio events
 audioPlayer.addEventListener('timeupdate', updateProgress);
-audioPlayer.addEventListener('ended', () => {
+
+audioPlayer.addEventListener('ended', async () => {
     if (repeatMode === 2) {
+        // Repetir una
         audioPlayer.currentTime = 0;
-        audioPlayer.play();
+        try {
+            await audioPlayer.play();
+        } catch (e) {
+            console.error('Error repitiendo:', e);
+        }
     } else if (repeatMode === 1 || currentTrackIndex < tracks.length - 1) {
-        playNext();
+        // Repetir todas o hay más canciones
+        await playNext();
     } else {
+        // Fin de la lista
         isPlaying = false;
         updatePlayButtons();
+        updateMediaSessionState();
     }
 });
 
 audioPlayer.addEventListener('play', () => {
     isPlaying = true;
     updatePlayButtons();
+    updateMediaSessionState();
 });
 
 audioPlayer.addEventListener('pause', () => {
     isPlaying = false;
     updatePlayButtons();
+    updateMediaSessionState();
 });
 
-// Media Session API
-if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', togglePlay);
-    navigator.mediaSession.setActionHandler('pause', togglePlay);
-    navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-    navigator.mediaSession.setActionHandler('nexttrack', playNext);
-}
+audioPlayer.addEventListener('error', (e) => {
+    console.error('Error de audio:', e);
+    isPlaying = false;
+    updatePlayButtons();
+});
+
+// Manejar cuando la app vuelve al primer plano
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') {
+        await resumeAudioContext();
+        updatePlayButtons();
+    }
+});
+
+// Manejar interrupciones de audio (llamadas, etc.)
+audioPlayer.addEventListener('pause', () => {
+    // Solo actualizar si fue una pausa externa
+    if (isPlaying) {
+        isPlaying = false;
+        updatePlayButtons();
+        updateMediaSessionState();
+    }
+});
 
 // Initialize volume bar
-volumeBar.style.setProperty('--volume', '100%');
+volumeBar.value = audioSettings.volume;
+volumeBar.style.setProperty('--volume', `${audioSettings.volume}%`);
 
 // ==========================================
 // Service Worker Registration
@@ -887,7 +1049,7 @@ volumeBar.style.setProperty('--volume', '100%');
 
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
-        .then(reg => console.log('Service Worker registrado'))
+        .then(reg => console.log('SW registrado'))
         .catch(err => console.log('Error SW:', err));
 }
 
@@ -897,10 +1059,18 @@ if ('serviceWorker' in navigator) {
 
 async function init() {
     try {
+        // Setup audio player para iOS
+        setupAudioPlayer();
+        
+        // Cargar configuración guardada
         loadAudioSettings();
+        
+        // Inicializar base de datos
         await initDB();
         tracks = await getAllTracks();
         filteredTracks = [...tracks];
+        
+        // Renderizar UI
         renderTrackList();
         updateStorageInfo();
         updateEqUI();
@@ -909,8 +1079,9 @@ async function init() {
         // Aplicar volumen guardado
         volumeBar.value = audioSettings.volume;
         volumeBar.style.setProperty('--volume', `${audioSettings.volume}%`);
+        
     } catch (error) {
-        console.error('Error inicializando:', error);
+        console.error('Error inicializando app:', error);
     }
 }
 
