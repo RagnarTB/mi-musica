@@ -55,13 +55,13 @@ const storageText = document.getElementById('storageText');
 async function initDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
-
+        
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
             db = request.result;
             resolve(db);
         };
-
+        
         request.onupgradeneeded = (event) => {
             const database = event.target.result;
             if (!database.objectStoreNames.contains(STORE_NAME)) {
@@ -76,7 +76,7 @@ async function saveTrack(trackData) {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.put(trackData);
-
+        
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
@@ -87,7 +87,7 @@ async function getAllTracks() {
         const transaction = db.transaction([STORE_NAME], 'readonly');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.getAll();
-
+        
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
@@ -98,7 +98,7 @@ async function deleteTrack(id) {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.delete(id);
-
+        
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
     });
@@ -115,10 +115,10 @@ function generateId() {
 async function handleFiles(files) {
     for (const file of files) {
         if (!file.type.startsWith('audio/')) continue;
-
+        
         const arrayBuffer = await file.arrayBuffer();
         const metadata = await extractMetadata(file);
-
+        
         const trackData = {
             id: generateId(),
             name: metadata.title || file.name.replace(/\.[^/.]+$/, ''),
@@ -130,11 +130,11 @@ async function handleFiles(files) {
             size: file.size,
             addedAt: Date.now()
         };
-
+        
         await saveTrack(trackData);
         tracks.push(trackData);
     }
-
+    
     renderTrackList();
     updateStorageInfo();
 }
@@ -143,7 +143,7 @@ async function extractMetadata(file) {
     return new Promise((resolve) => {
         const audio = new Audio();
         const url = URL.createObjectURL(file);
-
+        
         audio.onloadedmetadata = () => {
             const metadata = {
                 duration: audio.duration,
@@ -151,7 +151,7 @@ async function extractMetadata(file) {
                 artist: null,
                 artwork: null
             };
-
+            
             // Try to get title from filename
             const name = file.name.replace(/\.[^/.]+$/, '');
             const parts = name.split(' - ');
@@ -161,16 +161,16 @@ async function extractMetadata(file) {
             } else {
                 metadata.title = name;
             }
-
+            
             URL.revokeObjectURL(url);
             resolve(metadata);
         };
-
+        
         audio.onerror = () => {
             URL.revokeObjectURL(url);
             resolve({ duration: 0, title: file.name, artist: null, artwork: null });
         };
-
+        
         audio.src = url;
     });
 }
@@ -181,27 +181,27 @@ async function extractMetadata(file) {
 
 function renderTrackList() {
     trackList.innerHTML = '';
-
+    
     if (tracks.length === 0) {
         emptyState.classList.remove('hidden');
         return;
     }
-
+    
     emptyState.classList.add('hidden');
-
+    
     tracks.forEach((track, index) => {
         const item = document.createElement('div');
         item.className = 'track-item' + (index === currentTrackIndex ? ' playing' : '');
         item.innerHTML = `
             <div class="track-thumb">
-                ${track.artwork
-                ? `<img src="${track.artwork}" alt="">`
-                : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                ${track.artwork 
+                    ? `<img src="${track.artwork}" alt="">` 
+                    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <path d="M9 18V5l12-2v13"/>
                         <circle cx="6" cy="18" r="3"/>
                         <circle cx="18" cy="16" r="3"/>
                        </svg>`
-            }
+                }
             </div>
             <div class="track-item-info">
                 <div class="track-item-title">${track.name}</div>
@@ -209,7 +209,7 @@ function renderTrackList() {
             </div>
             <div class="track-item-duration">${formatTime(track.duration)}</div>
         `;
-
+        
         item.addEventListener('click', () => playTrack(index));
         trackList.appendChild(item);
     });
@@ -219,7 +219,7 @@ function updateStorageInfo() {
     const totalSize = tracks.reduce((sum, track) => sum + (track.size || 0), 0);
     const maxSize = 500 * 1024 * 1024; // 500MB estimate
     const percentage = Math.min((totalSize / maxSize) * 100, 100);
-
+    
     storageUsed.style.width = `${percentage}%`;
     storageText.textContent = `${formatSize(totalSize)} usados`;
 }
@@ -243,18 +243,18 @@ function formatTime(seconds) {
 
 async function playTrack(index) {
     if (index < 0 || index >= tracks.length) return;
-
+    
     currentTrackIndex = index;
     const track = tracks[index];
-
+    
     // Create blob URL from stored data
     const blob = new Blob([track.data], { type: track.mimeType });
     const url = URL.createObjectURL(blob);
-
+    
     audioPlayer.src = url;
     audioPlayer.play();
     isPlaying = true;
-
+    
     updatePlayerUI(track);
     updatePlayButtons();
     renderTrackList();
@@ -267,7 +267,7 @@ function updatePlayerUI(track) {
     trackArtist.textContent = track.artist;
     miniTitle.textContent = track.name;
     miniArtist.textContent = track.artist;
-
+    
     // Update artwork
     const artPlaceholder = `
         <div class="album-art-placeholder">
@@ -279,7 +279,7 @@ function updatePlayerUI(track) {
         </div>
         <div class="vinyl-effect"></div>
     `;
-
+    
     if (track.artwork) {
         albumArt.innerHTML = `<img src="${track.artwork}" alt=""><div class="vinyl-effect"></div>`;
         miniArt.innerHTML = `<img src="${track.artwork}" alt="">`;
@@ -293,7 +293,7 @@ function updatePlayerUI(track) {
             </svg>
         `;
     }
-
+    
     // Update media session
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -309,7 +309,7 @@ function togglePlay() {
         playTrack(0);
         return;
     }
-
+    
     if (isPlaying) {
         audioPlayer.pause();
     } else {
@@ -322,40 +322,40 @@ function togglePlay() {
 function updatePlayButtons() {
     const playIcon = '<svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
     const pauseIcon = '<svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
-
+    
     playBtn.innerHTML = isPlaying ? pauseIcon : playIcon;
     miniPlayBtn.innerHTML = isPlaying ? pauseIcon : playIcon;
 }
 
 function playNext() {
     if (tracks.length === 0) return;
-
+    
     let nextIndex;
     if (isShuffle) {
         nextIndex = Math.floor(Math.random() * tracks.length);
     } else {
         nextIndex = (currentTrackIndex + 1) % tracks.length;
     }
-
+    
     playTrack(nextIndex);
 }
 
 function playPrev() {
     if (tracks.length === 0) return;
-
+    
     // If more than 3 seconds in, restart current track
     if (audioPlayer.currentTime > 3) {
         audioPlayer.currentTime = 0;
         return;
     }
-
+    
     let prevIndex;
     if (isShuffle) {
         prevIndex = Math.floor(Math.random() * tracks.length);
     } else {
         prevIndex = (currentTrackIndex - 1 + tracks.length) % tracks.length;
     }
-
+    
     playTrack(prevIndex);
 }
 
@@ -367,7 +367,7 @@ function toggleShuffle() {
 function toggleRepeat() {
     repeatMode = (repeatMode + 1) % 3;
     repeatBtn.classList.toggle('active', repeatMode > 0);
-
+    
     if (repeatMode === 2) {
         repeatBtn.style.position = 'relative';
         if (!repeatBtn.querySelector('.repeat-one')) {
@@ -389,14 +389,14 @@ function toggleRepeat() {
 
 function updateProgress() {
     if (!audioPlayer.duration) return;
-
+    
     const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
     progressBar.value = progress;
     progressBar.style.setProperty('--progress', `${progress}%`);
-
+    
     currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
     durationEl.textContent = formatTime(audioPlayer.duration);
-
+    
     miniProgress.style.width = `${progress}%`;
 }
 
@@ -435,18 +435,18 @@ function showMiniPlayer() {
 
 async function deleteCurrentTrack() {
     if (currentTrackIndex === -1) return;
-
+    
     if (!confirm('¿Eliminar esta canción de tu biblioteca?')) return;
-
+    
     const track = tracks[currentTrackIndex];
     await deleteTrack(track.id);
-
+    
     tracks.splice(currentTrackIndex, 1);
-
+    
     audioPlayer.pause();
     audioPlayer.src = '';
     isPlaying = false;
-
+    
     if (tracks.length === 0) {
         currentTrackIndex = -1;
         miniPlayer.classList.remove('visible');
@@ -455,7 +455,7 @@ async function deleteCurrentTrack() {
         currentTrackIndex = Math.min(currentTrackIndex, tracks.length - 1);
         playTrack(currentTrackIndex);
     }
-
+    
     renderTrackList();
     updateStorageInfo();
 }
@@ -464,8 +464,28 @@ async function deleteCurrentTrack() {
 // Event Listeners
 // ==========================================
 
-addMusicBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+// iOS necesita que el click sea directo del usuario
+addMusicBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Pequeño delay para iOS
+    setTimeout(() => {
+        fileInput.click();
+    }, 100);
+});
+
+addMusicBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    fileInput.click();
+});
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+        handleFiles(e.target.files);
+    }
+    // Reset para poder seleccionar el mismo archivo otra vez
+    e.target.value = '';
+});
 
 playBtn.addEventListener('click', togglePlay);
 miniPlayBtn.addEventListener('click', (e) => {

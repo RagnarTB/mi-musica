@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -16,7 +15,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
     <div class="app">
         <!-- Pantalla de biblioteca -->
@@ -26,12 +24,12 @@
                 <div class="header-actions">
                     <button class="btn-icon" id="addMusicBtn" aria-label="Añadir música">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 5v14M5 12h14" />
+                            <path d="M12 5v14M5 12h14"/>
                         </svg>
                     </button>
                 </div>
             </header>
-
+            
             <div class="storage-info" id="storageInfo">
                 <div class="storage-bar">
                     <div class="storage-used" id="storageUsed"></div>
@@ -43,9 +41,9 @@
                 <div class="empty-state" id="emptyState">
                     <div class="empty-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M9 18V5l12-2v13" />
-                            <circle cx="6" cy="18" r="3" />
-                            <circle cx="18" cy="16" r="3" />
+                            <path d="M9 18V5l12-2v13"/>
+                            <circle cx="6" cy="18" r="3"/>
+                            <circle cx="18" cy="16" r="3"/>
                         </svg>
                     </div>
                     <h2>Sin música aún</h2>
@@ -60,13 +58,13 @@
             <header class="header player-header">
                 <button class="btn-icon" id="backBtn" aria-label="Volver">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
                     </svg>
                 </button>
                 <span class="header-title">Reproduciendo</span>
                 <button class="btn-icon" id="deleteTrackBtn" aria-label="Eliminar canción">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+                        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/>
                     </svg>
                 </button>
             </header>
@@ -75,9 +73,9 @@
                 <div class="album-art" id="albumArt">
                     <div class="album-art-placeholder">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-                            <path d="M9 18V5l12-2v13" />
-                            <circle cx="6" cy="18" r="3" />
-                            <circle cx="18" cy="16" r="3" />
+                            <path d="M9 18V5l12-2v13"/>
+                            <circle cx="6" cy="18" r="3"/>
+                            <circle cx="18" cy="16" r="3"/>
                         </svg>
                     </div>
                     <div class="vinyl-effect"></div>
@@ -99,41 +97,41 @@
                 <div class="controls">
                     <button class="btn-control" id="shuffleBtn" aria-label="Aleatorio">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+                            <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
                         </svg>
                     </button>
                     <button class="btn-control" id="prevBtn" aria-label="Anterior">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M19 20L9 12l10-8v16zM5 19V5" />
+                            <path d="M19 20L9 12l10-8v16zM5 19V5"/>
                         </svg>
                     </button>
                     <button class="btn-play" id="playBtn" aria-label="Reproducir">
                         <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z" />
+                            <path d="M8 5v14l11-7z"/>
                         </svg>
                         <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor" style="display:none">
-                            <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+                            <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
                         </svg>
                     </button>
                     <button class="btn-control" id="nextBtn" aria-label="Siguiente">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 4l10 8-10 8V4zM19 5v14" />
+                            <path d="M5 4l10 8-10 8V4zM19 5v14"/>
                         </svg>
                     </button>
                     <button class="btn-control" id="repeatBtn" aria-label="Repetir">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 1l4 4-4 4" />
-                            <path d="M3 11V9a4 4 0 014-4h14" />
-                            <path d="M7 23l-4-4 4-4" />
-                            <path d="M21 13v2a4 4 0 01-4 4H3" />
+                            <path d="M17 1l4 4-4 4"/>
+                            <path d="M3 11V9a4 4 0 014-4h14"/>
+                            <path d="M7 23l-4-4 4-4"/>
+                            <path d="M21 13v2a4 4 0 01-4 4H3"/>
                         </svg>
                     </button>
                 </div>
 
                 <div class="volume-container">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="volume-icon">
-                        <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                        <path d="M15.54 8.46a5 5 0 010 7.07" />
+                        <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+                        <path d="M15.54 8.46a5 5 0 010 7.07"/>
                     </svg>
                     <input type="range" class="volume-bar" id="volumeBar" value="100" min="0" max="100">
                 </div>
@@ -145,9 +143,9 @@
             <div class="mini-info" id="miniPlayerInfo">
                 <div class="mini-art" id="miniArt">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M9 18V5l12-2v13" />
-                        <circle cx="6" cy="18" r="3" />
-                        <circle cx="18" cy="16" r="3" />
+                        <path d="M9 18V5l12-2v13"/>
+                        <circle cx="6" cy="18" r="3"/>
+                        <circle cx="18" cy="16" r="3"/>
                     </svg>
                 </div>
                 <div class="mini-text">
@@ -158,10 +156,10 @@
             <div class="mini-controls">
                 <button class="btn-mini" id="miniPlayBtn" aria-label="Reproducir">
                     <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
+                        <path d="M8 5v14l11-7z"/>
                     </svg>
                     <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor" style="display:none">
-                        <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+                        <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
                     </svg>
                 </button>
             </div>
@@ -169,10 +167,9 @@
         </div>
     </div>
 
-    <input type="file" id="fileInput" accept="audio/*" multiple hidden>
+    <input type="file" id="fileInput" accept="audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/wav,audio/ogg,audio/aac,.mp3,.m4a,.wav,.ogg,.aac,.flac" multiple>
     <audio id="audioPlayer"></audio>
 
     <script src="app.js"></script>
 </body>
-
 </html>
