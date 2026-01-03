@@ -30,6 +30,22 @@
                 </div>
             </header>
             
+            <!-- Buscador -->
+            <div class="search-container">
+                <div class="search-box">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Buscar canciones o artistas..." autocomplete="off">
+                    <button class="search-clear" id="searchClear" style="display:none">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
             <div class="storage-info" id="storageInfo">
                 <div class="storage-bar">
                     <div class="storage-used" id="storageUsed"></div>
@@ -109,9 +125,6 @@
                         <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M8 5v14l11-7z"/>
                         </svg>
-                        <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor" style="display:none">
-                            <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-                        </svg>
                     </button>
                     <button class="btn-control" id="nextBtn" aria-label="Siguiente">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -134,6 +147,11 @@
                         <path d="M15.54 8.46a5 5 0 010 7.07"/>
                     </svg>
                     <input type="range" class="volume-bar" id="volumeBar" value="100" min="0" max="100">
+                    <button class="btn-eq" id="eqBtn" aria-label="Ecualizador">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -158,12 +176,78 @@
                     <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M8 5v14l11-7z"/>
                     </svg>
-                    <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor" style="display:none">
-                        <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
-                    </svg>
                 </button>
             </div>
             <div class="mini-progress" id="miniProgress"></div>
+        </div>
+
+        <!-- Panel de Ecualizador -->
+        <div class="eq-panel" id="eqPanel">
+            <div class="eq-content">
+                <div class="eq-header">
+                    <h2>Ecualizador</h2>
+                    <button class="btn-icon" id="closeEqBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Presets -->
+                <div class="eq-section">
+                    <h3>Presets</h3>
+                    <div class="preset-grid">
+                        <button class="preset-btn" data-preset="normal">Normal</button>
+                        <button class="preset-btn active" data-preset="bass-boost">Bass Boost</button>
+                        <button class="preset-btn" data-preset="bass-heavy">Bass Heavy</button>
+                        <button class="preset-btn" data-preset="club">Club</button>
+                        <button class="preset-btn" data-preset="parlante">Parlante</button>
+                        <button class="preset-btn" data-preset="audifonos">Audífonos</button>
+                        <button class="preset-btn" data-preset="rock">Rock</button>
+                        <button class="preset-btn" data-preset="electronica">Electrónica</button>
+                    </div>
+                </div>
+
+                <!-- Amplificador -->
+                <div class="eq-section">
+                    <h3>🔊 Amplificador</h3>
+                    <div class="eq-slider-row">
+                        <span class="eq-label">Boost</span>
+                        <input type="range" class="eq-slider" id="boostSlider" min="50" max="150" value="110">
+                        <span class="eq-value" id="boostValue">110%</span>
+                    </div>
+                </div>
+
+                <!-- Ecualizador Manual -->
+                <div class="eq-section">
+                    <h3>🎚️ Ecualizador</h3>
+                    <div class="eq-slider-row">
+                        <span class="eq-label">Bass (60Hz)</span>
+                        <input type="range" class="eq-slider bass" id="bassSlider" min="-12" max="12" value="6">
+                        <span class="eq-value" id="bassValue">+6dB</span>
+                    </div>
+                    <div class="eq-slider-row">
+                        <span class="eq-label">Low-Mid (250Hz)</span>
+                        <input type="range" class="eq-slider" id="lowMidSlider" min="-12" max="12" value="2">
+                        <span class="eq-value" id="lowMidValue">+2dB</span>
+                    </div>
+                    <div class="eq-slider-row">
+                        <span class="eq-label">Mid (1kHz)</span>
+                        <input type="range" class="eq-slider" id="midSlider" min="-12" max="12" value="0">
+                        <span class="eq-value" id="midValue">0dB</span>
+                    </div>
+                    <div class="eq-slider-row">
+                        <span class="eq-label">High-Mid (4kHz)</span>
+                        <input type="range" class="eq-slider" id="highMidSlider" min="-12" max="12" value="1">
+                        <span class="eq-value" id="highMidValue">+1dB</span>
+                    </div>
+                    <div class="eq-slider-row">
+                        <span class="eq-label">Treble (12kHz)</span>
+                        <input type="range" class="eq-slider" id="trebleSlider" min="-12" max="12" value="2">
+                        <span class="eq-value" id="trebleValue">+2dB</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

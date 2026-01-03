@@ -1,5 +1,5 @@
 // ==========================================
-// MiMúsica - Reproductor PWA Offline
+// MiMúsica v3 - Con Audio Mejorado
 // ==========================================
 
 const DB_NAME = 'MiMusicaDB';
@@ -8,10 +8,48 @@ const STORE_NAME = 'tracks';
 
 let db = null;
 let tracks = [];
+let filteredTracks = [];
 let currentTrackIndex = -1;
 let isPlaying = false;
 let isShuffle = false;
-let repeatMode = 0; // 0: off, 1: all, 2: one
+let repeatMode = 0;
+
+// Audio Context y Nodos
+let audioContext = null;
+let sourceNode = null;
+let gainNode = null;
+let bassFilter = null;
+let lowMidFilter = null;
+let midFilter = null;
+let highMidFilter = null;
+let trebleFilter = null;
+let compressor = null;
+let preampGain = null;
+
+// Configuración de audio actual
+let audioSettings = {
+    preset: 'bass-boost',
+    volume: 100,
+    boost: 100,
+    bass: 6,
+    lowMid: 2,
+    mid: 0,
+    highMid: 1,
+    treble: 2
+};
+
+// Presets de ecualizador
+const PRESETS = {
+    'normal': { bass: 0, lowMid: 0, mid: 0, highMid: 0, treble: 0, boost: 100, name: 'Normal' },
+    'bass-boost': { bass: 6, lowMid: 3, mid: 0, highMid: 1, treble: 2, boost: 110, name: 'Bass Boost' },
+    'bass-heavy': { bass: 10, lowMid: 5, mid: -1, highMid: 0, treble: 1, boost: 115, name: 'Bass Heavy' },
+    'club': { bass: 8, lowMid: 4, mid: 2, highMid: 3, treble: 4, boost: 120, name: 'Club' },
+    'parlante': { bass: 9, lowMid: 4, mid: 1, highMid: 2, treble: 3, boost: 125, name: 'Parlante' },
+    'audifonos': { bass: 5, lowMid: 2, mid: 1, highMid: 2, treble: 3, boost: 105, name: 'Audífonos' },
+    'rock': { bass: 5, lowMid: 2, mid: -1, highMid: 3, treble: 4, boost: 110, name: 'Rock' },
+    'electronica': { bass: 7, lowMid: 4, mid: 0, highMid: 2, treble: 5, boost: 115, name: 'Electrónica' },
+    'custom': { bass: 6, lowMid: 2, mid: 0, highMid: 1, treble: 2, boost: 100, name: 'Personalizado' }
+};
 
 // DOM Elements
 const audioPlayer = document.getElementById('audioPlayer');
@@ -22,6 +60,8 @@ const playerScreen = document.getElementById('playerScreen');
 const trackList = document.getElementById('trackList');
 const emptyState = document.getElementById('emptyState');
 const miniPlayer = document.getElementById('miniPlayer');
+const searchInput = document.getElementById('searchInput');
+const searchClear = document.getElementById('searchClear');
 
 // Player controls
 const playBtn = document.getElementById('playBtn');
@@ -34,6 +74,24 @@ const deleteTrackBtn = document.getElementById('deleteTrackBtn');
 const progressBar = document.getElementById('progressBar');
 const volumeBar = document.getElementById('volumeBar');
 const miniPlayBtn = document.getElementById('miniPlayBtn');
+const eqBtn = document.getElementById('eqBtn');
+
+// Audio controls
+const eqPanel = document.getElementById('eqPanel');
+const closeEqBtn = document.getElementById('closeEqBtn');
+const presetBtns = document.querySelectorAll('.preset-btn');
+const boostSlider = document.getElementById('boostSlider');
+const boostValue = document.getElementById('boostValue');
+const bassSlider = document.getElementById('bassSlider');
+const bassValue = document.getElementById('bassValue');
+const lowMidSlider = document.getElementById('lowMidSlider');
+const lowMidValue = document.getElementById('lowMidValue');
+const midSlider = document.getElementById('midSlider');
+const midValue = document.getElementById('midValue');
+const highMidSlider = document.getElementById('highMidSlider');
+const highMidValue = document.getElementById('highMidValue');
+const trebleSlider = document.getElementById('trebleSlider');
+const trebleValue = document.getElementById('trebleValue');
 
 // Display elements
 const trackTitle = document.getElementById('trackTitle');
@@ -47,6 +105,167 @@ const miniArt = document.getElementById('miniArt');
 const miniProgress = document.getElementById('miniProgress');
 const storageUsed = document.getElementById('storageUsed');
 const storageText = document.getElementById('storageText');
+
+// ==========================================
+// Web Audio API Setup
+// ==========================================
+
+function initAudioContext() {
+    if (audioContext) return;
+    
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Crear nodos
+    sourceNode = audioContext.createMediaElementSource(audioPlayer);
+    
+    // Preamp para boost general
+    preampGain = audioContext.createGain();
+    preampGain.gain.value = 1;
+    
+    // Filtros de ecualizador (BiquadFilter)
+    // Bass: 60Hz
+    bassFilter = audioContext.createBiquadFilter();
+    bassFilter.type = 'lowshelf';
+    bassFilter.frequency.value = 60;
+    bassFilter.gain.value = audioSettings.bass;
+    
+    // Low-Mid: 250Hz
+    lowMidFilter = audioContext.createBiquadFilter();
+    lowMidFilter.type = 'peaking';
+    lowMidFilter.frequency.value = 250;
+    lowMidFilter.Q.value = 1;
+    lowMidFilter.gain.value = audioSettings.lowMid;
+    
+    // Mid: 1kHz
+    midFilter = audioContext.createBiquadFilter();
+    midFilter.type = 'peaking';
+    midFilter.frequency.value = 1000;
+    midFilter.Q.value = 1;
+    midFilter.gain.value = audioSettings.mid;
+    
+    // High-Mid: 4kHz
+    highMidFilter = audioContext.createBiquadFilter();
+    highMidFilter.type = 'peaking';
+    highMidFilter.frequency.value = 4000;
+    highMidFilter.Q.value = 1;
+    highMidFilter.gain.value = audioSettings.highMid;
+    
+    // Treble: 12kHz
+    trebleFilter = audioContext.createBiquadFilter();
+    trebleFilter.type = 'highshelf';
+    trebleFilter.frequency.value = 12000;
+    trebleFilter.gain.value = audioSettings.treble;
+    
+    // Compresor para evitar distorsión
+    compressor = audioContext.createDynamicsCompressor();
+    compressor.threshold.value = -6;
+    compressor.knee.value = 30;
+    compressor.ratio.value = 4;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.25;
+    
+    // Gain final (volumen)
+    gainNode = audioContext.createGain();
+    gainNode.gain.value = audioSettings.volume / 100;
+    
+    // Conectar cadena de audio
+    sourceNode
+        .connect(preampGain)
+        .connect(bassFilter)
+        .connect(lowMidFilter)
+        .connect(midFilter)
+        .connect(highMidFilter)
+        .connect(trebleFilter)
+        .connect(compressor)
+        .connect(gainNode)
+        .connect(audioContext.destination);
+    
+    // Aplicar preset inicial
+    applyPreset('bass-boost');
+}
+
+function resumeAudioContext() {
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+}
+
+// ==========================================
+// Ecualizador Functions
+// ==========================================
+
+function applyPreset(presetName) {
+    const preset = PRESETS[presetName];
+    if (!preset) return;
+    
+    audioSettings.preset = presetName;
+    audioSettings.bass = preset.bass;
+    audioSettings.lowMid = preset.lowMid;
+    audioSettings.mid = preset.mid;
+    audioSettings.highMid = preset.highMid;
+    audioSettings.treble = preset.treble;
+    audioSettings.boost = preset.boost;
+    
+    updateAudioNodes();
+    updateEqUI();
+    updatePresetButtons();
+    saveAudioSettings();
+}
+
+function updateAudioNodes() {
+    if (!audioContext) return;
+    
+    // Aplicar valores a los filtros
+    bassFilter.gain.value = audioSettings.bass;
+    lowMidFilter.gain.value = audioSettings.lowMid;
+    midFilter.gain.value = audioSettings.mid;
+    highMidFilter.gain.value = audioSettings.highMid;
+    trebleFilter.gain.value = audioSettings.treble;
+    
+    // Boost (preamp)
+    preampGain.gain.value = audioSettings.boost / 100;
+    
+    // Volumen final
+    gainNode.gain.value = audioSettings.volume / 100;
+}
+
+function updateEqUI() {
+    // Actualizar sliders
+    boostSlider.value = audioSettings.boost;
+    boostValue.textContent = audioSettings.boost + '%';
+    
+    bassSlider.value = audioSettings.bass;
+    bassValue.textContent = (audioSettings.bass >= 0 ? '+' : '') + audioSettings.bass + 'dB';
+    
+    lowMidSlider.value = audioSettings.lowMid;
+    lowMidValue.textContent = (audioSettings.lowMid >= 0 ? '+' : '') + audioSettings.lowMid + 'dB';
+    
+    midSlider.value = audioSettings.mid;
+    midValue.textContent = (audioSettings.mid >= 0 ? '+' : '') + audioSettings.mid + 'dB';
+    
+    highMidSlider.value = audioSettings.highMid;
+    highMidValue.textContent = (audioSettings.highMid >= 0 ? '+' : '') + audioSettings.highMid + 'dB';
+    
+    trebleSlider.value = audioSettings.treble;
+    trebleValue.textContent = (audioSettings.treble >= 0 ? '+' : '') + audioSettings.treble + 'dB';
+}
+
+function updatePresetButtons() {
+    presetBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === audioSettings.preset);
+    });
+}
+
+function saveAudioSettings() {
+    localStorage.setItem('mimusica-audio', JSON.stringify(audioSettings));
+}
+
+function loadAudioSettings() {
+    const saved = localStorage.getItem('mimusica-audio');
+    if (saved) {
+        audioSettings = { ...audioSettings, ...JSON.parse(saved) };
+    }
+}
 
 // ==========================================
 // IndexedDB Setup
@@ -135,7 +354,7 @@ async function handleFiles(files) {
         tracks.push(trackData);
     }
     
-    renderTrackList();
+    filterTracks();
     updateStorageInfo();
 }
 
@@ -152,7 +371,6 @@ async function extractMetadata(file) {
                 artwork: null
             };
             
-            // Try to get title from filename
             const name = file.name.replace(/\.[^/.]+$/, '');
             const parts = name.split(' - ');
             if (parts.length >= 2) {
@@ -176,6 +394,31 @@ async function extractMetadata(file) {
 }
 
 // ==========================================
+// Search
+// ==========================================
+
+function filterTracks() {
+    const query = searchInput.value.toLowerCase().trim();
+    
+    if (!query) {
+        filteredTracks = [...tracks];
+    } else {
+        filteredTracks = tracks.filter(track => 
+            track.name.toLowerCase().includes(query) ||
+            track.artist.toLowerCase().includes(query)
+        );
+    }
+    
+    searchClear.style.display = query ? 'flex' : 'none';
+    renderTrackList();
+}
+
+function clearSearch() {
+    searchInput.value = '';
+    filterTracks();
+}
+
+// ==========================================
 // UI Rendering
 // ==========================================
 
@@ -189,9 +432,15 @@ function renderTrackList() {
     
     emptyState.classList.add('hidden');
     
-    tracks.forEach((track, index) => {
+    if (filteredTracks.length === 0) {
+        trackList.innerHTML = '<div class="no-results">No se encontraron canciones</div>';
+        return;
+    }
+    
+    filteredTracks.forEach((track) => {
+        const originalIndex = tracks.findIndex(t => t.id === track.id);
         const item = document.createElement('div');
-        item.className = 'track-item' + (index === currentTrackIndex ? ' playing' : '');
+        item.className = 'track-item' + (originalIndex === currentTrackIndex ? ' playing' : '');
         item.innerHTML = `
             <div class="track-thumb">
                 ${track.artwork 
@@ -210,18 +459,18 @@ function renderTrackList() {
             <div class="track-item-duration">${formatTime(track.duration)}</div>
         `;
         
-        item.addEventListener('click', () => playTrack(index));
+        item.addEventListener('click', () => playTrack(originalIndex));
         trackList.appendChild(item);
     });
 }
 
 function updateStorageInfo() {
     const totalSize = tracks.reduce((sum, track) => sum + (track.size || 0), 0);
-    const maxSize = 500 * 1024 * 1024; // 500MB estimate
+    const maxSize = 500 * 1024 * 1024;
     const percentage = Math.min((totalSize / maxSize) * 100, 100);
     
     storageUsed.style.width = `${percentage}%`;
-    storageText.textContent = `${formatSize(totalSize)} usados`;
+    storageText.textContent = `${formatSize(totalSize)} • ${tracks.length} canciones`;
 }
 
 function formatSize(bytes) {
@@ -244,10 +493,13 @@ function formatTime(seconds) {
 async function playTrack(index) {
     if (index < 0 || index >= tracks.length) return;
     
+    // Inicializar audio context en primer play
+    initAudioContext();
+    resumeAudioContext();
+    
     currentTrackIndex = index;
     const track = tracks[index];
     
-    // Create blob URL from stored data
     const blob = new Blob([track.data], { type: track.mimeType });
     const url = URL.createObjectURL(blob);
     
@@ -268,7 +520,6 @@ function updatePlayerUI(track) {
     miniTitle.textContent = track.name;
     miniArtist.textContent = track.artist;
     
-    // Update artwork
     const artPlaceholder = `
         <div class="album-art-placeholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
@@ -294,7 +545,6 @@ function updatePlayerUI(track) {
         `;
     }
     
-    // Update media session
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
             title: track.name,
@@ -309,6 +559,9 @@ function togglePlay() {
         playTrack(0);
         return;
     }
+    
+    initAudioContext();
+    resumeAudioContext();
     
     if (isPlaying) {
         audioPlayer.pause();
@@ -343,7 +596,6 @@ function playNext() {
 function playPrev() {
     if (tracks.length === 0) return;
     
-    // If more than 3 seconds in, restart current track
     if (audioPlayer.currentTime > 3) {
         audioPlayer.currentTime = 0;
         return;
@@ -384,7 +636,7 @@ function toggleRepeat() {
 }
 
 // ==========================================
-// Progress & Time
+// Progress & Volume
 // ==========================================
 
 function updateProgress() {
@@ -406,9 +658,28 @@ function seekTo(e) {
 }
 
 function setVolume(e) {
-    const volume = e.target.value / 100;
-    audioPlayer.volume = volume;
-    volumeBar.style.setProperty('--volume', `${e.target.value}%`);
+    audioSettings.volume = parseInt(e.target.value);
+    volumeBar.style.setProperty('--volume', `${audioSettings.volume}%`);
+    
+    if (gainNode) {
+        gainNode.gain.value = audioSettings.volume / 100;
+    } else {
+        audioPlayer.volume = audioSettings.volume / 100;
+    }
+    
+    saveAudioSettings();
+}
+
+// ==========================================
+// EQ Panel
+// ==========================================
+
+function showEqPanel() {
+    eqPanel.classList.add('visible');
+}
+
+function hideEqPanel() {
+    eqPanel.classList.remove('visible');
 }
 
 // ==========================================
@@ -456,7 +727,7 @@ async function deleteCurrentTrack() {
         playTrack(currentTrackIndex);
     }
     
-    renderTrackList();
+    filterTracks();
     updateStorageInfo();
 }
 
@@ -464,14 +735,11 @@ async function deleteCurrentTrack() {
 // Event Listeners
 // ==========================================
 
-// iOS necesita que el click sea directo del usuario
+// File input
 addMusicBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Pequeño delay para iOS
-    setTimeout(() => {
-        fileInput.click();
-    }, 100);
+    setTimeout(() => fileInput.click(), 100);
 });
 
 addMusicBtn.addEventListener('touchend', (e) => {
@@ -483,10 +751,14 @@ fileInput.addEventListener('change', (e) => {
     if (e.target.files && e.target.files.length > 0) {
         handleFiles(e.target.files);
     }
-    // Reset para poder seleccionar el mismo archivo otra vez
     e.target.value = '';
 });
 
+// Search
+searchInput.addEventListener('input', filterTracks);
+searchClear.addEventListener('click', clearSearch);
+
+// Player controls
 playBtn.addEventListener('click', togglePlay);
 miniPlayBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -504,6 +776,77 @@ volumeBar.addEventListener('input', setVolume);
 
 miniPlayer.addEventListener('click', showPlayerScreen);
 
+// EQ Panel
+eqBtn.addEventListener('click', showEqPanel);
+closeEqBtn.addEventListener('click', hideEqPanel);
+
+eqPanel.addEventListener('click', (e) => {
+    if (e.target === eqPanel) hideEqPanel();
+});
+
+// Preset buttons
+presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        applyPreset(btn.dataset.preset);
+    });
+});
+
+// EQ Sliders
+boostSlider.addEventListener('input', (e) => {
+    audioSettings.boost = parseInt(e.target.value);
+    audioSettings.preset = 'custom';
+    updateAudioNodes();
+    updateEqUI();
+    updatePresetButtons();
+    saveAudioSettings();
+});
+
+bassSlider.addEventListener('input', (e) => {
+    audioSettings.bass = parseInt(e.target.value);
+    audioSettings.preset = 'custom';
+    updateAudioNodes();
+    updateEqUI();
+    updatePresetButtons();
+    saveAudioSettings();
+});
+
+lowMidSlider.addEventListener('input', (e) => {
+    audioSettings.lowMid = parseInt(e.target.value);
+    audioSettings.preset = 'custom';
+    updateAudioNodes();
+    updateEqUI();
+    updatePresetButtons();
+    saveAudioSettings();
+});
+
+midSlider.addEventListener('input', (e) => {
+    audioSettings.mid = parseInt(e.target.value);
+    audioSettings.preset = 'custom';
+    updateAudioNodes();
+    updateEqUI();
+    updatePresetButtons();
+    saveAudioSettings();
+});
+
+highMidSlider.addEventListener('input', (e) => {
+    audioSettings.highMid = parseInt(e.target.value);
+    audioSettings.preset = 'custom';
+    updateAudioNodes();
+    updateEqUI();
+    updatePresetButtons();
+    saveAudioSettings();
+});
+
+trebleSlider.addEventListener('input', (e) => {
+    audioSettings.treble = parseInt(e.target.value);
+    audioSettings.preset = 'custom';
+    updateAudioNodes();
+    updateEqUI();
+    updatePresetButtons();
+    saveAudioSettings();
+});
+
+// Audio events
 audioPlayer.addEventListener('timeupdate', updateProgress);
 audioPlayer.addEventListener('ended', () => {
     if (repeatMode === 2) {
@@ -554,10 +897,18 @@ if ('serviceWorker' in navigator) {
 
 async function init() {
     try {
+        loadAudioSettings();
         await initDB();
         tracks = await getAllTracks();
+        filteredTracks = [...tracks];
         renderTrackList();
         updateStorageInfo();
+        updateEqUI();
+        updatePresetButtons();
+        
+        // Aplicar volumen guardado
+        volumeBar.value = audioSettings.volume;
+        volumeBar.style.setProperty('--volume', `${audioSettings.volume}%`);
     } catch (error) {
         console.error('Error inicializando:', error);
     }
