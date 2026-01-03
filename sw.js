@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mimusica-v4';
+const CACHE_NAME = 'mimusica-v5';
 const ASSETS = [
     '/',
     '/index.html',
@@ -9,7 +9,6 @@ const ASSETS = [
     '/icon-512.png'
 ];
 
-// Install
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -18,35 +17,26 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// Activate - limpiar caches viejos
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then(keys => {
             return Promise.all(
-                keys.filter(key => key !== CACHE_NAME)
-                    .map(key => caches.delete(key))
+                keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
             );
         }).then(() => self.clients.claim())
     );
 });
 
-// Fetch - Network first, fallback to cache
 self.addEventListener('fetch', (event) => {
     event.respondWith(
         fetch(event.request)
             .then(response => {
-                // Clonar y guardar en cache
                 if (response.status === 200) {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, responseClone);
-                    });
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                 }
                 return response;
             })
-            .catch(() => {
-                return caches.match(event.request)
-                    .then(response => response || caches.match('/index.html'));
-            })
+            .catch(() => caches.match(event.request).then(r => r || caches.match('/index.html')))
     );
 });
